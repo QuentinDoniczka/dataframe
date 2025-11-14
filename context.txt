@@ -1,0 +1,352 @@
+Voici le contexte complet du projet e-commerce Olist (Brésil).
+
+CONTEXTE GLOBAL TECHNIQUE
+
+- Projet : e-commerce au Brésil (données Olist).
+- Les fichiers bruts .csv sont lus depuis : ../donnees/ebrasil
+- Les tables nettoyées sont sauvegardées en .parquet dans : ./ecommerce
+- Imports principaux : pandas, numpy, matplotlib, seaborn, datetime, etc.
+- Un dictionnaire des états brésiliens (sigle → nom complet) est utilisé pour enrichir les tables clients, vendeurs et géolocalisation.
+
+DICT ETATS BRESILIENS (dictEtats)
+
+AC → Acre
+AL → Alagoas
+AP → Amapá
+AM → Amazonas
+BA → Bahia
+CE → Ceará
+ES → Espírito Santo
+GO → Goiás
+MA → Maranhão
+MT → Mato Grosso
+MS → Mato Grosso do Sul
+MG → Minas Gerais
+PA → Pará
+PB → Paraíba
+PR → Paraná
+PE → Pernambouc
+PI → Piauí
+RJ → Rio de Janeiro
+RN → Rio Grande do Norte
+RS → Rio Grande do Sul
+RO → Rondônia
+RR → Roraima
+SC → Santa Catarina
+SP → São Paulo
+SE → Sergipe
+TO → Tocantins
+DF → District fédéral
+
+TABLES PRINCIPALES CRÉÉES (format Parquet)
+
+1) TABLE ORDERS (./ecommerce/orders.parquet)
+
+Source : olist_orders_dataset.csv
+
+Clés / colonnes principales :
+- order_id : identifiant commande
+- customer_id : identifiant client
+- purchase_timestamp : datetime (date/heure d’achat)
+- approved_at : datetime (date/heure d’approbation)
+- delivered_carrier : datetime (prise en charge par le transporteur)
+- delivered_customer : datetime (livraison au client)
+- estimated_delivery : datetime (date de livraison estimée)
+- status : statut de la commande
+
+Dimensions de temps dérivées à partir de purchase_timestamp :
+- annee : année (int)
+- mois : mois (int)
+- annee_mois : année*100 + mois (int)
+- jour : jour du mois (int)
+- annee_jour : combinaison année + jour (int)
+- jour_semaine : jour de la semaine (int)
+- trimestre : trimestre (int)
+- annee_trimestre : année*10 + trimestre (int)
+- semaine : numéro de semaine ISO (int)
+- annee_semaine : combinaison année + semaine (int)
+- heure : heure de la journée (int)
+
+Durées (en heures) :
+- approuvee : durée entre purchase_timestamp et approved_at
+- envoyee : durée entre purchase_timestamp et delivered_carrier
+- livree : durée entre purchase_timestamp et delivered_customer
+- estimee : durée entre purchase_timestamp et estimated_delivery
+
+NB : dans le notebook actuel, ces durées sont calculées à partir de .dt.seconds et sont donc tronquées modulo 24h (elles ne tiennent pas compte des jours entiers).
+
+Transformations principales :
+- Conversion des colonnes de dates brutes (order_purchase_timestamp, …) en vraies colonnes datetime (purchase_timestamp, approved_at, etc.).
+- Suppression des colonnes brutes de dates et de order_status, remplacées par les nouvelles colonnes propres.
+- Calcul des colonnes de temps (année, mois, semaine, etc.) et des durées en heures.
+- Sauvegarde en Parquet : ./ecommerce/orders.parquet
+
+
+2) TABLE ITEMS (./ecommerce/items.parquet)
+
+Source : olist_order_items_dataset.csv
+
+Clés / colonnes principales :
+- order_id : identifiant commande
+- order_item_id : identifiant de ligne de commande (int)
+- product_id : identifiant produit
+- seller_id : identifiant vendeur
+- price : prix de la ligne (float)
+- freight_value : frais de port (float)
+- shipping_limit : datetime (date limite d’expédition)
+- limit : durée (en heures) entre la commande et la date limite d’expédition
+
+NB : dans le notebook actuel, limit est calculée à partir de .dt.seconds et est donc tronquée modulo 24h (les jours entiers ne sont pas pris en compte).
+
+Transformations principales :
+- Jointure avec orders.parquet pour récupérer purchase_timestamp.
+- Conversion de shipping_limit_date en datetime (shipping_limit).
+- Calcul de limit = (shipping_limit – purchase_timestamp) en heures.
+- Suppression de shipping_limit_date et purchase_timestamp après calcul.
+- Sauvegarde en Parquet (gzip, pyarrow) : ./ecommerce/items.parquet
+
+
+3) TABLE PAYMENTS (./ecommerce/payments.parquet)
+
+Source : olist_order_payments_dataset.csv
+
+Structure logique (table pivotée en mémoire) : 1 ligne par commande (order_id), colonnes par type de paiement.
+Types de paiement : boleto, credit_card, debit_card, not_defined, voucher.
+
+Colonnes principales de la table pivotée :
+- int_boleto, int_credit_card, int_debit_card, int_not_defined, int_voucher : nombre de versements (installments) par type de paiement (int8)
+- value_boleto, value_credit_card, value_debit_card, value_not_defined, value_voucher : montants payés par type (float)
+- value : montant total payé tous moyens confondus (float)
+
+Transformations principales :
+- Lecture du CSV, renommage des colonnes pour enlever le préfixe “payment_”.
+- Pivot (pivot_table) pour passer d’un format “une ligne par paiement” (order_id + type) à “une ligne par commande” avec colonnes par type de paiement.
+- Remplacement de “installments” par “int” dans les noms de colonnes.
+- Cast des colonnes int_* en int8.
+- Calcul de value = somme de tous les value_*.
+
+Remarque importante :
+- Dans l’état actuel du notebook, c’est encore la table brute (une ligne par paiement) qui est sauvegardée dans ./ecommerce/payments.parquet via donnees.to_parquet(...).
+- Pour que le fichier Parquet corresponde à la structure pivotée décrite ci-dessus, il faudra utiliser :
+  payments.reset_index().to_parquet('./ecommerce/payments.parquet', ...).
+
+
+4) TABLE REVIEWS (./ecommerce/reviews.parquet)
+
+Source : olist_order_reviews_dataset.csv
+
+But : résumer les avis clients par commande, avec agrégations par score (1 à 5).
+
+Colonnes par score (1 à 5) :
+- creation_1 … creation_5 : délai (en heures) entre la commande et la création de l’avis, pour chaque score
+- answer_1 … answer_5 : délai (en heures) entre la création de l’avis et la réponse, pour chaque score
+- comment_1 … comment_5 : longueur (nombre de caractères) des commentaires pour chaque score
+- score_1 … score_5 : nombre d’avis de chaque score
+
+Colonnes agrégées globales par commande :
+- score : score agrégé (somme pondérée des notes de 1 à 5)
+- creation : délai global commande → création avis (somme des créations pour tous les scores)
+- answer : délai global création → réponse (somme des réponses pour tous les scores)
+- comment : longueur totale des commentaires (somme des comment_1 à comment_5)
+
+NB : dans le notebook actuel, les durées creation et answer sont calculées avec .dt.seconds et sont donc tronquées modulo 24h.
+
+Transformations principales :
+- Suppression du préfixe “review_” sur la plupart des colonnes (sauf ids).
+- Conversion en datetime des dates d’avis : creation_date, answer_timestamp.
+- Jointure avec orders.parquet pour récupérer purchase_timestamp.
+- Calcul des deltas de temps (en heures) entre commande, création d’avis et réponse.
+- Calcul de la longueur de comment_message (nombre de caractères).
+- Pivot / agrégations par order_id et score pour créer les colonnes *_1 à *_5 et les colonnes agrégées.
+- Sauvegarde en Parquet : ./ecommerce/reviews.parquet
+
+
+5) TABLE PRODUCTS (./ecommerce/products.parquet)
+
+Source : olist_products_dataset.csv
+
+Colonnes principales :
+- product_id : identifiant produit
+- name_lenght : longueur du nom du produit (float)
+- description_lenght : longueur de la description (float)
+- photos_qty : nombre de photos (float)
+- weight_g : poids en grammes (float)
+- length_cm : longueur en cm (float)
+- height_cm : hauteur en cm (float)
+- width_cm : largeur en cm (float)
+- category_name : nom de la catégorie (object)
+
+Transformations principales :
+- Nettoyage / cast des colonnes numériques (weight_g, length_cm, etc.).
+- Gestion des NaN éventuels.
+- Traduction des noms de catégories en anglais via product_category_name_translation.csv, quelques corrections manuelles, remplacement des NaN par 'not documented', puis renommage de category_name_english en category_name.
+- Sauvegarde en Parquet : ./ecommerce/products.parquet
+
+
+6) TABLE CUSTOMERS (./ecommerce/customers.parquet)
+
+Source : olist_customers_dataset.csv
+
+Colonnes principales :
+- customer_id : identifiant client (clé utilisée dans orders)
+- customer_unique_id : identifiant “unique client” (plusieurs customer_id possibles par client)
+- zip_code : code postal (int32)
+- city : ville (str)
+- state : sigle état brésilien (str, ex : SP)
+- name_state : nom complet de l’état (str, via dictEtats)
+
+Transformations principales :
+- Conversion de customer_zip_code_prefix en int32 et renommage en zip_code.
+- Renommage de customer_city → city, customer_state → state.
+- Ajout de name_state via dictEtats[state].
+- Sauvegarde en Parquet : ./ecommerce/customers.parquet
+
+
+7) TABLE SELLERS (./ecommerce/sellers.parquet)
+
+Source : olist_sellers_dataset.csv
+
+Colonnes principales :
+- seller_id : identifiant vendeur
+- zip_code : code postal (int32)
+- city : ville
+- state : sigle d’état
+- name_state : nom complet de l’état
+
+Transformations principales :
+- Renommage des colonnes pour supprimer les préfixes “seller_” et “_prefix”.
+- Conversion du code postal en int32 (zip_code).
+- Ajout de name_state via dictEtats[state].
+- Sauvegarde en Parquet : ./ecommerce/sellers.parquet
+
+
+8) TABLE GEOLOCATION (./ecommerce/geolocation.parquet)
+
+Source : olist_geolocation_dataset.csv
+
+Colonnes après agrégation :
+- zip_code : code postal (int32)
+- city : ville (valeur représentative / first)
+- state : nom complet de l’état (via dictEtats)
+- lat_min : latitude minimale observée pour ce code postal
+- lat_max : latitude maximale
+- lat : latitude médiane
+- lng_min : longitude minimale
+- lng_max : longitude maximale
+- lng : longitude médiane
+
+Transformations principales :
+- Renommage pour supprimer les préfixes “geolocation_” et “_prefix”.
+- Remplacement des sigles d’état par le nom complet via dictEtats.
+- Conversion de zip_code en int32.
+- Groupby par zip_code avec agrégation de lat/lng (min, median, max), city et state (first).
+- Renommage des colonnes agrégées pour obtenir lat_min, lat_max, lat, lng_min, lng_max, lng.
+- Sauvegarde en Parquet : ./ecommerce/geolocation.parquet
+
+
+STRUCTURE GLOBALE DU MODÈLE
+
+- Tables “fait” (fact tables) :
+  - orders : informations principales de commande + temps + délais logistiques
+  - items : lignes de commande (détail produits / vendeurs)
+  - payments : paiements par commande (modes et montants)
+  - reviews : avis clients agrégés par commande
+
+- Tables “dimension” :
+  - customers : informations clients et localisation (zip_code, ville, état)
+  - sellers : informations vendeurs et localisation
+  - products : caractéristiques produits et catégorie
+  - geolocation : informations géographiques agrégées par code postal
+
+- Clés principales / jointures :
+  - order_id : lien entre orders, items, payments, reviews
+  - customer_id : lien entre orders et customers
+  - seller_id : lien entre items et sellers
+  - product_id : lien entre items et products
+  - zip_code : lien géographique entre customers / sellers et geolocation
+
+
+CONTEXTE PROJET / CONSIGNES (PDF)
+
+1) DESCRIPTION GÉNÉRALE DES DONNÉES OLIST
+
+- Jeu de données public de e-commerce brésilien, correspondant aux commandes passées sur Olist Store.
+- Environ 100 000 commandes, sur la période 2016–2018, réalisées sur plusieurs marketplaces au Brésil.
+- Les données permettent d’analyser une commande selon plusieurs axes :
+  - statut de la commande,
+  - prix,
+  - paiement,
+  - performances de transport/livraison,
+  - localisation client,
+  - attributs produits,
+  - avis clients.
+- Un jeu de données de géolocalisation relie les codes postaux brésiliens aux coordonnées latitude / longitude.
+
+Contexte métier Olist :
+- Olist connecte de petites entreprises de tout le Brésil à des canaux de vente via un seul contrat.
+- Les vendeurs commercialisent leurs produits sur Olist Store et expédient directement aux clients via les partenaires logistiques Olist.
+- Après l’achat :
+  - le vendeur est averti pour traiter la commande ;
+  - lorsque le client reçoit le produit (ou à la date de livraison estimée), il reçoit un e-mail de satisfaction ;
+  - le client peut donner une note sur son expérience d’achat et rédiger un commentaire.
+
+Référence schéma de données :
+- Le schéma complet des tables brutes est disponible sur Kaggle (Brazilian E-commerce – Olist).
+
+2) DATAFRAMES CONSOLIDÉS POUR L’ANALYSE
+
+L’analyse finale ne se fait pas directement sur toutes les tables brutes, mais sur trois dataFrames consolidés :
+
+1. DataFrame “Analyse des ventes et avis clients”
+   - Contient les informations de ventes croisées avec les avis des clients.
+   - Variables typiques : mesures de ventes, scores d’avis, délais de livraison, dimensions client, produit, temps, etc.
+
+2. DataFrame “Analyse des achats”
+   - Centré sur les achats (commandes, détails de lignes, paiements).
+   - Contient les données nécessaires pour analyser le comportement d’achat, les paniers, les moyens de paiement, etc.
+
+3. DataFrame “Analyse des achats (agrégés) et ventes”
+   - Agrège les achats et les ventes pour disposer d’indicateurs côté commande/achat et côté vente/avis.
+   - Sert de base pour des analyses globales (rentabilité, performance globale par hiérarchies).
+
+3) CONSTRUCTION DES DEUX MODÈLES EN ÉTOILE
+
+Le projet demande de construire deux modèles en étoile (“star schemas”) à partir des données consolidées.
+
+Pour chaque modèle en étoile :
+- Identifier les métriques (mesures fact).
+- Identifier les dimensions (tables de dimension utilisées pour l’analyse).
+- Définir les hiérarchies au sein de chaque dimension
+  (exemples : Temps = Année → Trimestre → Mois → Jour ;
+              Géographie = Pays → Région → État → Ville ; etc.).
+- Le PDF fournit des exemples de dimensions/hiérarchies et de métriques, à adapter à vos données.
+
+4) TÂCHES D’ANALYSE À RÉALISER
+
+Pour chaque modèle en étoile, produire trois analyses distinctes :
+
+- Au total : 2 modèles × 3 analyses = 6 analyses.
+- Chaque analyse doit :
+  - répondre à une question claire (problème, hypothèse, recherche).
+  - utiliser au moins trois hiérarchies (temps, géographie, produit, etc.).
+  - commencer par des données agrégées (vue globale) puis descendre dans les hiérarchies (drill-down).
+  - comporter au minimum 6 à 8 graphiques (visualisations).
+
+Format des analyses :
+- Chaque analyse est un Notebook Jupyter.
+- Chaque Notebook doit être sauvegardé en format HTML.
+
+5) LIVRABLES ET ÉCHÉANCES
+
+Livrables finaux :
+- Rassembler toutes les analyses (les 6 Notebooks + HTML) dans une seule archive .zip ou .rar.
+- Envoyer cette archive à : razvan@bizoi.fr
+- Il est recommandé d’utiliser WeTransfer (https://wetransfer.com).
+
+Dates importantes :
+- Date limite d’envoi du projet : avant le 30/11/2025.
+- Présentation orale : 15 à 20 minutes, prévue le 03/12/2025.
+
+La présentation doit :
+- Synthétiser les objectifs, les modèles en étoile construits, les principales analyses réalisées et les insights trouvés.
+- S’appuyer sur vos graphiques et conclusions les plus importants.

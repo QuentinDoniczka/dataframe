@@ -1,0 +1,14 @@
+:
+TEMPS: year, month
+RELIE_TEMPS,  11 FAIT_VENTES, 0N TEMPS
+AVIS: review_id, review_creation_date, review_answer_timestamp
+
+CLIENT_GEO: customer_id, customer_zip_code_prefix, customer_city, customer_state, cust_lat, cust_lng, cust_geo_city, cust_geo_state
+RELIE_CLIENT, 11 FAIT_VENTES, 0N CLIENT_GEO
+FAIT_VENTES: order_id, order_purchase_timestamp, year, month, order_payment_value, payment_methods_count, payment_installments_max, payment_main_type, payment_types_concat, review_score, customer_id, review_id, order_status
+RELIE_AVIS,   11 FAIT_VENTES, 0N AVIS
+
+:
+STATUT_COMMANDE: order_status
+RELIE_STATUT, 11 FAIT_VENTES, 0N STATUT_COMMANDE
+:

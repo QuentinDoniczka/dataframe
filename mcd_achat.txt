@@ -1,0 +1,19 @@
+PRODUIT: product_id, product_category_name, product_weight_g, product_length_cm, product_height_cm, product_width_cm
+RELIE_PRODUIT, 11 FAIT_ACHATS, 0N PRODUIT
+:
+:
+
+RELIE_TEMPS, 11 FAIT_ACHATS, 0N TEMPS
+FAIT_ACHATS: order_id, order_item_id, price, freight_value, line_revenue, line_total, purchase_timestamp, year, month
+RELIE_CLIENT, 11 FAIT_ACHATS, 0N CLIENT
+CLIENT: customer_id, customer_zip_code_prefix, customer_city, customer_state, cust_lat, cust_lng
+
+TEMPS: purchase_timestamp, year, month
+RELIE_VENDEUR, 11 FAIT_ACHATS, 0N VENDEUR
+RELIE_STATUT, 11 FAIT_ACHATS, 0N STATUT_COMMANDE
+:
+
+:
+VENDEUR: seller_id, seller_zip_code_prefix, seller_city, seller_state, sell_lat, sell_lng
+STATUT_COMMANDE: order_status
+:
