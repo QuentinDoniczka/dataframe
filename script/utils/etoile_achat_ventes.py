@@ -4,17 +4,12 @@ from graphviz import Digraph
 
 
 def graphe_etoile_achats_ventes() -> Digraph:
-    """
-    Génère le schéma en étoile de la table de faits :
-    FAIT_ACHATS_VENTES_AGREGES (grain = order_item_id).
-    """
     dot = Digraph("Star_Achats_Ventes_Agreges", format="png", engine="dot")
 
-    # Attributs globaux du graphe
     dot.attr(
         bgcolor="white",
         fontsize="9",
-        rankdir="TB",   # top -> bottom
+        rankdir="TB",
         margin="0.1",
         pad="0.1",
     )
@@ -23,47 +18,49 @@ def graphe_etoile_achats_ventes() -> Digraph:
         overlap="false",
         nodesep="0.4",
         ranksep="0.6",
-        size="10,6!",   # taille cible (pouces) pour le rendu PNG
+        size="10,6!",
         dpi="120",
     )
 
-    # Attributs globaux des noeuds / arêtes
     dot.attr("node", fontsize="9", margin="0.08,0.05")
     dot.attr("edge", fontsize="8")
 
-    # ------------------------------------------------------------------
-    # TABLE DE FAITS
-    # ------------------------------------------------------------------
     dot.node(
         "F_ACHATS_VENTES_AGREGES",
         label=(
             "{FAIT_ACHATS_VENTES_AGREGES|"
-            "grain: order_item_id (ligne de commande)\\l"
-            "---------------------\\l"
-            "Clés : order_item_id, order_id, product_id, seller_id, customer_id\\l"
-            "       purchase_timestamp, order_status, order_id (FK DIM_PAIEMENT)\\l"
-            "---------------------\\l"
-            "Mesures ligne (items) : price, freight_value, line_revenue, line_total\\l"
-            "Mesures agrégées commande : order_items_count, order_revenue, order_total, ...\\l"
-            "Paiement (agrégé) : order_payment_value, payment_methods_count, ...\\l"
-            "Avis (agrégé, optionnel) : order_avg_review, order_reviews_count\\l"
+            "order_item_id\\l"
+            "order_id\\l"
+            "product_id\\l"
+            "seller_id\\l"
+            "customer_id\\l"
+            "purchase_timestamp\\l"
+            "order_status\\l"
+            "order_items_count\\l"
+            "order_revenue\\l"
+            "order_total\\l"
+            "order_payment_value\\l"
+            "payment_methods_count\\l"
+            "payment_installments_max\\l"
+            "order_avg_review\\l"
+            "order_reviews_count\\l"
+            "price\\l"
+            "freight_value\\l"
+            "line_revenue\\l"
+            "line_total\\l"
             "}"
         ),
         shape="record",
         style="filled",
         fillcolor="#eeeeee",
-)
+    )
 
-
-    # ------------------------------------------------------------------
-    # DIMENSIONS
-    # ------------------------------------------------------------------
     dot.node(
         "DIM_TEMPS",
         label=(
             "{DIM_TEMPS|"
-            "+ purchase_timestamp / order_purchase_timestamp (PK)\\l"
-            "---------------------\\l"
+            "purchase_timestamp\\l"
+            "order_purchase_timestamp\\l"
             "annee\\l"
             "trimestre\\l"
             "mois\\l"
@@ -85,8 +82,7 @@ def graphe_etoile_achats_ventes() -> Digraph:
         "DIM_PRODUIT",
         label=(
             "{DIM_PRODUIT|"
-            "+ product_id (PK)\\l"
-            "---------------------\\l"
+            "product_id\\l"
             "category_name\\l"
             "name_lenght\\l"
             "description_lenght\\l"
@@ -106,11 +102,10 @@ def graphe_etoile_achats_ventes() -> Digraph:
         "DIM_VENDEUR",
         label=(
             "{DIM_VENDEUR|"
-            "+ seller_id (PK)\\l"
-            "---------------------\\l"
-            "zip_code (FK geo)\\l"
+            "seller_id\\l"
+            "zip_code\\l"
             "city\\l"
-            "state (sigle)\\l"
+            "state\\l"
             "name_state\\l"
             "}"
         ),
@@ -123,11 +118,10 @@ def graphe_etoile_achats_ventes() -> Digraph:
         "DIM_CLIENT",
         label=(
             "{DIM_CLIENT|"
-            "+ customer_id (PK)\\l"
-            "---------------------\\l"
-            "zip_code (FK geo)\\l"
+            "customer_id\\l"
+            "zip_code\\l"
             "city\\l"
-            "state (sigle)\\l"
+            "state\\l"
             "name_state\\l"
             "}"
         ),
@@ -140,12 +134,15 @@ def graphe_etoile_achats_ventes() -> Digraph:
         "DIM_GEOLOCALISATION",
         label=(
             "{DIM_GEOLOCALISATION|"
-            "+ zip_code (PK)\\l"
-            "---------------------\\l"
+            "zip_code\\l"
             "city_geo\\l"
             "state_geo\\l"
-            "lat_min, lat, lat_max\\l"
-            "lng_min, lng, lng_max\\l"
+            "lat_min\\l"
+            "lat\\l"
+            "lat_max\\l"
+            "lng_min\\l"
+            "lng\\l"
+            "lng_max\\l"
             "}"
         ),
         shape="record",
@@ -157,9 +154,7 @@ def graphe_etoile_achats_ventes() -> Digraph:
         "DIM_STATUT",
         label=(
             "{DIM_STATUT_COMMANDE|"
-            "+ order_status (PK)\\l"
-            "---------------------\\l"
-            "ex: delivered, shipped, canceled, ...\\l"
+            "order_status\\l"
             "}"
         ),
         shape="record",
@@ -171,8 +166,7 @@ def graphe_etoile_achats_ventes() -> Digraph:
         "DIM_PAIEMENT",
         label=(
             "{DIM_PAIEMENT|"
-            "+ order_id (PK)\\l"
-            "---------------------\\l"
+            "order_id\\l"
             "payment_main_type\\l"
             "payment_methods_count\\l"
             "payment_installments_max\\l"
@@ -184,9 +178,6 @@ def graphe_etoile_achats_ventes() -> Digraph:
         fillcolor="#e0fff5",
     )
 
-    # ------------------------------------------------------------------
-    # ARÊTES (RELATIONS)
-    # ------------------------------------------------------------------
     dot.edge(
         "F_ACHATS_VENTES_AGREGES",
         "DIM_TEMPS",
@@ -215,10 +206,9 @@ def graphe_etoile_achats_ventes() -> Digraph:
     dot.edge(
         "F_ACHATS_VENTES_AGREGES",
         "DIM_PAIEMENT",
-        label="order_id (profil paiement agrégé)",
+        label="order_id",
     )
 
-    # Liens géographiques (clients / vendeurs -> géolocalisation)
     dot.edge(
         "DIM_CLIENT",
         "DIM_GEOLOCALISATION",
@@ -233,9 +223,3 @@ def graphe_etoile_achats_ventes() -> Digraph:
     )
 
     return dot
-
-
-if __name__ == "__main__":
-    # Génération directe du PNG si le script est exécuté seul
-    g = graphe_etoile_achats_ventes()
-    g.render("Star_Achats_Ventes_Agreges", cleanup=True)
