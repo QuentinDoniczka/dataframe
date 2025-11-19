@@ -1,0 +1,65 @@
+CONTEXTE ÉTOILE 1 — VENTES & AVIS CLIENTS (DATAFRAME 1)
+
+Objectif :
+Construire le modèle en étoile basé sur les données du DataFrame 1, orienté ventes, paiements, avis clients et délais de livraison.
+Niveau d’analyse : commande (grain = order_id).
+
+Table de faits :
+FAIT_VENTES_AVIS
+Basée sur orders.parquet, enrichie avec payments.parquet (pivoté), reviews.parquet (agrégé), customers.parquet et geolocation.parquet.
+
+Mesures principales :
+- Montant total payé : value
+- Montants par type de paiement : value_credit_card, value_boleto, etc.
+- Nombre d’installments par type : int_*
+- Score global des avis : score
+- Scores détaillés : score_1…score_5
+- Délais logistiques : approuvée, envoyée, livrée, estimée (en heures)
+- Délais d’avis : creation, answer (en heures)
+- Longueur totale des commentaires : comment
+
+Dimensions :
+1. DIM_TEMPS :
+   - année, trimestre, mois, jour
+   - semaine, annee_semaine
+   - annee_mois, annee_trimestre, annee_jour
+   - heure
+   Source : purchase_timestamp
+
+2. DIM_CLIENT :
+   - customer_id
+   - city, state (sigle), name_state (nom complet)
+   Source : customers.parquet
+
+3. DIM_GEOLOCALISATION_CLIENT :
+   - zip_code
+   - city_geo, state_geo
+   - lat, lng, lat_min/max, lng_min/max
+   Source : geolocation.parquet
+
+4. DIM_PAIEMENT :
+   - int_credit_card, int_boleto, int_debit_card, etc.
+   - value_credit_card, value_boleto, etc.
+   (payments.parquet version pivotée, 1 ligne par order_id)
+
+5. DIM_AVIS :
+   - score_1…5
+   - creation_1…5
+   - answer_1…5
+   - comment_1…5
+   Source : reviews.parquet agrégé
+
+6. DIM_STATUT_COMMANDE :
+   - statut de commande (canceled, delivered, shipped, etc.)
+   Source : orders.parquet
+
+Clés et relations :
+- order_id : Fact ↔ Paiements / Avis / Orders
+- customer_id : Fact ↔ Client
+- zip_code : Client ↔ Geolocation
+- purchase_timestamp : Fact ↔ Temps
+
+Points d’attention techniques :
+- Durées calculées actuellement via .dt.seconds (tronquées à 24h). Prévoir .dt.total_seconds() / 3600.
+- S’assurer d’utiliser la version pivotée de payments.parquet.
+- Vérifier la consolidation correcte des avis par order_id.

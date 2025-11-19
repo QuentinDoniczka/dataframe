@@ -1,0 +1,101 @@
+CONTEXTE ÉTOILE 3 — ACHATS AGRÉGÉS & VENTES (DATAFRAME 3)
+
+Objectif :
+Construire le modèle en étoile basé sur le DataFrame 3, combinant les achats détaillés (niveau ligne de commande) avec des indicateurs agrégés de ventes et de paiements au niveau commande.
+Niveau d’analyse principal : order_item_id (grain ligne), avec des mesures agrégées au niveau order_id répliquées sur chaque ligne.
+
+Table de faits :
+FAIT_ACHATS_VENTES_AGREGES
+Basée sur items.parquet (olist_order_items_dataset), enrichie avec :
+- orders.parquet (olist_orders_dataset)
+- payments.parquet (olist_order_payments_dataset, agrégé par order_id)
+- products.parquet (olist_products_dataset)
+- sellers.parquet (olist_sellers_dataset)
+- customers.parquet (olist_order_customer_dataset)
+- geolocation.parquet (olist_geolocation_dataset)
+- éventuellement reviews.parquet agrégé par commande pour ajouter des indicateurs de satisfaction.
+
+Mesures principales (niveau ligne) :
+- price
+- freight_value
+- line_revenue = price
+- line_total = price + freight_value
+
+Mesures agrégées (niveau commande, répliquées sur chaque ligne) :
+- order_items_count : nombre de lignes de commande par order_id
+- order_products_count : nombre de produits distincts par commande
+- order_sellers_count : nombre de vendeurs distincts par commande
+- order_revenue = somme(price) par order_id
+- order_freight = somme(freight_value) par order_id
+- order_total = order_revenue + order_freight
+
+Indicateurs de paiement (agrégés à partir de payments.parquet) :
+- order_payment_value : montant total payé pour la commande
+- payment_methods_count : nombre de modes de paiement utilisés
+- payment_installments_max : nombre maximum d’installments sur la commande
+- payment_main_type : mode de paiement principal (ex. credit_card, boleto)
+- payment_types_concat : concaténation / liste des types de paiement utilisés
+
+Indicateurs d’avis (si joints depuis reviews.parquet, optionnel) :
+- order_avg_review : score moyen des avis par commande
+- order_reviews_count : nombre d’avis associés à la commande
+
+Dimensions :
+
+1. DIM_PRODUIT :
+   - product_id
+   - category_name
+   - name_lenght, description_lenght
+   - photos_qty
+   - weight_g, length_cm, height_cm, width_cm
+   Source : products.parquet
+
+2. DIM_VENDEUR :
+   - seller_id
+   - zip_code, city, state, name_state
+   Source : sellers.parquet
+
+3. DIM_CLIENT :
+   - customer_id
+   - zip_code, city, state, name_state
+   Source : customers.parquet
+
+4. DIM_GEOLOCALISATION :
+   - zip_code
+   - city_geo, state_geo
+   - lat, lng, lat_min/max, lng_min/max
+   Source : geolocation.parquet
+
+5. DIM_TEMPS :
+   - année, trimestre, mois, jour
+   - semaine, annee_semaine
+   - annee_mois, annee_trimestre, annee_jour
+   - heure
+   Source : purchase_timestamp / order_purchase_timestamp depuis orders.parquet
+
+6. DIM_STATUT_COMMANDE :
+   - statut de la commande (delivered, shipped, canceled, etc.)
+   Source : orders.parquet
+
+7. DIM_PAIEMENT (profil de paiement agrégé) :
+   - payment_main_type
+   - payment_methods_count (éventuellement regroupé en classes : 1, 2, ≥3)
+   - payment_installments_max (éventuellement regroupé en tranches : 1, 2–3, 4–6, >6)
+   - payment_types_concat (liste ou catégorie de combinaison de moyens de paiement)
+   Source : payments.parquet agrégé par order_id
+
+Clés et relations :
+- order_item_id : clé interne de la table de faits
+- order_id : Fact ↔ Orders ↔ DIM_PAIEMENT (via agrégats de paiements)
+- product_id : Fact ↔ DIM_PRODUIT
+- seller_id : Fact ↔ DIM_VENDEUR
+- customer_id : Orders ↔ DIM_CLIENT
+- zip_code : DIM_CLIENT / DIM_VENDEUR ↔ DIM_GEOLOCALISATION
+- purchase_timestamp / order_purchase_timestamp : Fact ↔ DIM_TEMPS
+- order_status : Fact ↔ DIM_STATUT_COMMANDE
+
+Points d’attention techniques :
+- Calculer au préalable, par order_id, les agrégats issus d’items.parquet (order_revenue, order_freight, order_total, order_items_count, etc.) et de payments.parquet (order_payment_value, payment_methods_count, payment_installments_max, payment_main_type, payment_types_concat).
+- Joindre ces agrégats sur items.parquet via order_id, en acceptant que les mesures “order_*” soient répliquées sur chaque ligne ; pour des analyses au niveau commande, regrouper par order_id avant d’agréger.
+- Si les avis sont intégrés, préparer reviews.parquet agrégé au niveau commande (score moyen, nombre d’avis) avant la jointure.
+- Bien distinguer ce modèle de l’Étoile 2 : ici, le grain reste la ligne de commande, mais on dispose en plus d’indicateurs agrégés de paiement (et éventuellement d’avis) pour analyser conjointement le détail des achats et la performance globale de chaque commande.

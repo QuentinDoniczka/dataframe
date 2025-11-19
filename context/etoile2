@@ -1,0 +1,67 @@
+CONTEXTE ÉTOILE 2 — ACHATS (DATAFRAME 2)
+
+Objectif :
+Construire le modèle en étoile basé sur le DataFrame 2 : analyse des achats au niveau ligne de commande.
+Niveau d’analyse : order_item_id.
+
+Table de faits :
+FAIT_ACHATS
+Basée sur items.parquet, enrichie avec products.parquet, sellers.parquet, customers.parquet, geolocation.parquet et orders.parquet.
+
+Mesures principales :
+- price
+- freight_value
+- line_revenue
+- line_total
+- limit (délai shipping_limit – purchase_timestamp, en heures)
+
+Dimensions :
+1. DIM_PRODUIT :
+   - product_id
+   - category_name
+   - name_lenght, description_lenght
+   - photos_qty
+   - weight_g, length_cm, height_cm, width_cm
+   Source : products.parquet
+
+2. DIM_VENDEUR :
+   - seller_id
+   - zip_code, city, state, name_state
+   Source : sellers.parquet
+
+3. DIM_CLIENT :
+   - customer_id
+   - zip_code, city, state, name_state
+   Source : customers.parquet
+
+4. DIM_GEOLOCALISATION :
+   - zip_code
+   - city_geo, state_geo
+   - lat, lng, lat_min/max, lng_min/max
+   Source : geolocation.parquet
+
+5. DIM_TEMPS :
+   - année, trimestre, mois, jour
+   - semaine, annee_semaine
+   - annee_mois
+   - heure
+   Source : purchase_timestamp depuis orders.parquet
+
+6. DIM_STATUT_COMMANDE :
+   - statut de la commande (delivered, shipped, canceled, etc.)
+   Source : orders.parquet
+
+Clés et relations :
+- order_item_id : clé interne de la table de faits
+- order_id : Fact ↔ Orders
+- product_id : Fact ↔ Produit
+- seller_id : Fact ↔ Vendeur
+- customer_id : Orders ↔ Client
+- zip_code : Client/Vendeur ↔ Geolocation
+- purchase_timestamp : Fact ↔ Temps
+
+Points d’attention techniques :
+- limit est actuellement calculé via .dt.seconds (tronqué). Recalculer via .dt.total_seconds() / 3600.
+- Vérifier les catégories produits traduites et normalisation des NaN en "not documented".
+- Vérifier l’alignement des zip_code avec geolocation.parquet (min/median/max).
+
